@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบสต็อกสินค้า </title>
+  <link rel="stylesheet" href="style.css">
+  <!-- ไลบรารีสแกน QR ด้วยกล้อง -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <!-- ไลบรารีสร้างภาพ QR code -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+
+  <header class="topbar">
+    <h1>📦 ระบบสต็อกสินค้า </h1>
+    <span id="total-summary"></span>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="scan">📷 สแกน QR</button>
+    <button class="tab-btn" data-tab="list">📦 รายการสินค้า</button>
+    <button class="tab-btn" data-tab="add">➕ เพิ่มสินค้า</button>
+    <button class="tab-btn" data-tab="history">📜 ประวัติ</button>
+  </nav>
+
+  <main>
+
+    <!-- ==================== แท็บ: สแกน QR ==================== -->
+    <section id="tab-scan" class="tab-page active">
+      <div class="card">
+        <h2>สแกน QR Code / บาร์โค้ด</h2>
+        <p class="hint">เล็งกล้องไปที่ QR code หรือบาร์โค้ดบนสินค้า เมื่ออ่านสำเร็จหน้าเพิ่มสต็อกจะเด้งขึ้นมาทันที</p>
+        <div id="qr-reader"></div>
+        <div class="btn-row">
+          <button id="btn-start-scan" class="btn primary">▶ เปิดกล้องสแกน</button>
+          <button id="btn-stop-scan" class="btn danger" hidden>⏹ ปิดกล้อง</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== แท็บ: รายการสินค้า ==================== -->
+    <section id="tab-list" class="tab-page">
+      <div class="card">
+        <h2>รายการสินค้าทั้งหมด</h2>
+        <input type="search" id="search-box" placeholder="🔍 ค้นหาชื่อสินค้า / รหัสสินค้า / หมวดหมู่...">
+        <div id="product-list"></div>
+      </div>
+    </section>
+
+    <!-- ==================== แท็บ: เพิ่มสินค้า ==================== -->
+    <section id="tab-add" class="tab-page">
+      <div class="card">
+        <h2 id="form-title">เพิ่มสินค้าใหม่</h2>
+        <form id="product-form">
+          <input type="hidden" id="f-editing-id">
+          <label>รหัสสินค้า (SKU)
+            <div class="inline">
+              <input type="text" id="f-sku" placeholder="เช่น P0001" required>
+              <button type="button" id="btn-gen-sku" class="btn small">สุ่มรหัส</button>
+            </div>
+          </label>
+          <label>ชื่อสินค้า *
+            <input type="text" id="f-name" placeholder="เช่น กระดาษ A4 80 แกรม" required>
+          </label>
+          <div class="grid2">
+            <label>จำนวนเริ่มต้น *
+              <input type="number" id="f-qty" min="0" step="1" value="0" required>
+            </label>
+            <label>หน่วย
+              <input type="text" id="f-unit" placeholder="ชิ้น / กล่อง / แพ็ค" value="ชิ้น">
+            </label>
+          </div>
+          <div class="grid2">
+            <label>หมวดหมู่
+              <input type="text" id="f-category" placeholder="เช่น เครื่องเขียน">
+            </label>
+            <label>ราคา (บาท)
+              <input type="number" id="f-price" min="0" step="0.01" value="0">
+            </label>
+          </div>
+          <label>หมายเหตุ
+            <textarea id="f-note" rows="2" placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)"></textarea>
+          </label>
+          <div class="btn-row">
+            <button type="submit" class="btn primary" id="btn-save">💾 บันทึกสินค้า</button>
+            <button type="button" class="btn" id="btn-cancel-edit" hidden>ยกเลิกแก้ไข</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ==================== แท็บ: ประวัติ ==================== -->
+    <section id="tab-history" class="tab-page">
+      <div class="card">
+        <h2>ประวัติการเคลื่อนไหวสต็อก</h2>
+        <div class="btn-row">
+          <button id="btn-clear-history" class="btn danger small">🗑 ล้างประวัติ</button>
+        </div>
+        <div id="history-list"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== Modal: แสดง QR ของสินค้า ==================== -->
+  <div id="qr-modal" class="modal" hidden>
+    <div class="modal-box">
+      <button class="modal-close" data-close>✕</button>
+      <h3 id="qr-modal-name"></h3>
+      <p id="qr-modal-sku" class="sku-text"></p>
+      <div id="qr-code-box"></div>
+      <p class="hint">พิมพ์หรือบันทึกภาพนี้ไปติดที่สินค้า แล้วใช้แท็บ "สแกน QR" อ่านได้เลย</p>
+      <div class="btn-row center">
+        <button id="btn-download-qr" class="btn primary">⬇ ดาวน์โหลด PNG</button>
+        <button id="btn-print-qr" class="btn">🖨 พิมพ์</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== Modal: รับเข้า / เบิกออก ==================== -->
+  <div id="move-modal" class="modal" hidden>
+    <div class="modal-box">
+      <button class="modal-close" data-close>✕</button>
+      <h3 id="move-modal-title"></h3>
+      <p id="move-modal-info"></p>
+      <label>จำนวน
+        <input type="number" id="move-qty" min="1" step="1" value="1">
+      </label>
+      <div class="btn-row center">
+        <button id="btn-confirm-move" class="btn primary">ยืนยัน</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== Modal: ผลการสแกน (เด้งขึ้นเมื่ออ่าน QR สำเร็จ) ==================== -->
+  <div id="scan-modal" class="modal" hidden>
+    <div class="modal-box">
+      <button class="modal-close" data-close>✕</button>
+      <div id="scan-modal-body"></div>
+    </div>
+  </div>
+
+  <div id="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
