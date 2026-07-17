@@ -63,6 +63,36 @@
         <!-- กล่องแจ้งปัญหา : ถ้าเปิดกล้องไม่สำเร็จ จะแสดงสาเหตุ + วิธีแก้ตรงนี้
              (JavaScript เป็นคนเติมข้อความให้ตามสาเหตุที่เจอจริง) -->
         <div id="cam-error" hidden></div>
+
+        <!-- ==================== แผงรายการที่สแกน (แบบเครื่องคิดเงิน POS) ====================
+             สแกนสินค้าปุ๊บ ของจะเด้งเข้าลิสต์นี้ทันที ไม่ต้องหยุดกล้อง
+             สแกนตัวเดิมซ้ำ = จำนวน +1 / ปรับจำนวนเอง หรือลบแถวได้
+             เสร็จแล้วกดปุ่มด้านล่างเพื่อบันทึกทุกรายการเข้าสต็อกทีเดียว -->
+        <div id="scan-list-panel">
+          <!-- หัวแผง : จำนวนรายการ (ซ้าย) + ยอดรวมราคา (ขวา) -->
+          <div class="scan-list-head">
+            <div>
+              <b>รายการที่สแกน</b>
+              <div id="scan-list-count" class="muted-small">0 รายการ</div>
+            </div>
+            <div class="scan-list-total">
+              <div class="muted-small">ยอดรวม</div>
+              <div id="scan-list-price">฿0.00</div>
+            </div>
+          </div>
+
+          <!-- ตัวลิสต์ : JavaScript เป็นคนวาดแถวสินค้าให้ (หรือแสดงภาพ "ยังไม่มีรายการ") -->
+          <div id="scan-items"></div>
+
+          <!-- ปุ่มจัดการทั้งลิสต์ -->
+          <div class="scan-list-actions">
+            <button id="btn-commit-in" class="btn success" style="flex:1">📥 บันทึกเข้าสต็อกทั้งหมด</button>
+          </div>
+          <div class="scan-list-actions">
+            <button id="btn-commit-out" class="btn warning" style="flex:1">📤 เบิกออกทั้งหมด</button>
+            <button id="btn-clear-scan" class="btn">🗑 ล้าง</button>
+          </div>
+        </div>
       </div>
     </section>
 
