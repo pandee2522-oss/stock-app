@@ -31,10 +31,33 @@
       <div class="card">
         <h2>สแกน QR Code / บาร์โค้ด</h2>
         <p class="hint">เล็งกล้องไปที่ QR code หรือบาร์โค้ดบนสินค้า เมื่ออ่านสำเร็จหน้าเพิ่มสต็อกจะเด้งขึ้นมาทันที</p>
-        <div id="qr-reader"></div>
+
+        <!-- กล่องครอบวิดีโอกล้อง : ต้องมีตัวครอบ (wrap) เพื่อให้วาง"กรอบเล็งเป้า"
+             ซ้อนทับบนวิดีโอได้ด้วย position: absolute -->
+        <div id="qr-reader-wrap">
+          <!-- ไลบรารี html5-qrcode จะสร้างวิดีโอกล้องใส่ใน div นี้ให้อัตโนมัติ -->
+          <div id="qr-reader"></div>
+
+          <!-- กรอบเล็งเป้า (แสดงเฉพาะตอนกล้องเปิด) ประกอบด้วยมุม 4 มุม + เส้นสแกนวิ่งขึ้นลง
+               ใส่ pointer-events: none ไว้ใน CSS เพื่อไม่ให้บังการกดวิดีโอ -->
+          <div id="scan-frame" hidden>
+            <div class="frame-box">
+              <span class="corner tl"></span><!-- มุมซ้ายบน -->
+              <span class="corner tr"></span><!-- มุมขวาบน -->
+              <span class="corner bl"></span><!-- มุมซ้ายล่าง -->
+              <span class="corner br"></span><!-- มุมขวาล่าง -->
+              <span class="scan-line"></span><!-- เส้นสีเขียววิ่งขึ้นลง -->
+            </div>
+            <p class="frame-hint">วาง QR / บาร์โค้ดให้อยู่ในกรอบ</p>
+          </div>
+        </div>
+
+        <!-- ปุ่มควบคุมกล้อง : ปุ่มสลับกล้องกับปุ่มแฟลชจะโผล่มาเฉพาะตอนกล้องเปิดอยู่ -->
         <div class="btn-row">
           <button id="btn-start-scan" class="btn primary">▶ เปิดกล้องสแกน</button>
           <button id="btn-stop-scan" class="btn danger" hidden>⏹ ปิดกล้อง</button>
+          <button id="btn-switch-cam" class="btn" hidden>🔄 สลับกล้อง</button>
+          <button id="btn-torch" class="btn" hidden>🔦 เปิดแฟลช</button>
         </div>
       </div>
     </section>
