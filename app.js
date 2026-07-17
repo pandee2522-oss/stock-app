@@ -442,9 +442,17 @@ function showCamError(err) {
   const name = (err && err.name) || '';
   const msg = (err && (err.message || String(err))) || '';
   const all = name + ' ' + msg; // ข้อความรวมไว้ค้นหาคำสำคัญ
+
+  // ตรวจว่ากำลังเปิดผ่าน "เบราว์เซอร์ในแอป" หรือเปล่า (LINE, Facebook,
+  // Instagram, Messenger, TikTok ฯลฯ) พวกนี้ส่วนใหญ่ใช้กล้องไม่ได้
+  // ดูจาก userAgent ซึ่งแอปพวกนี้จะแอบใส่ชื่อตัวเองไว้
+  const inApp = /Line\/|FBAN|FBAV|FB_IAB|Instagram|Messenger|MicroMessenger|TikTok/i.test(navigator.userAgent);
   let advice;
 
-  if (location.protocol === 'file:') {
+  if (inApp) {
+    // เปิดจากลิงก์ในแชท = เข้าเบราว์เซอร์จำลองของแอปนั้น กล้องมักโดนบล็อก
+    advice = 'คุณเปิดลิงก์ผ่านเบราว์เซอร์ในแอป (เช่น LINE / Facebook) ซึ่งใช้กล้องไม่ได้ วิธีแก้: กดปุ่มเมนู ⋮ (หรือปุ่มแชร์) ที่มุมจอ แล้วเลือก "เปิดในเบราว์เซอร์" / "Open in Safari" / "Open in Chrome" แล้วค่อยกดเปิดกล้องใหม่';
+  } else if (location.protocol === 'file:') {
     // เปิดไฟล์ index.html ตรงๆ (ดับเบิลคลิก) = ที่อยู่ขึ้นต้นด้วย file://
     // เบราว์เซอร์จะไม่ยอมให้เว็บแบบนี้ใช้กล้องเด็ดขาด
     advice = 'คุณเปิดไฟล์โดยตรง (file://) ซึ่งเบราว์เซอร์บล็อกกล้องเสมอ วิธีแก้: เปิดโปรแกรม cmd ในโฟลเดอร์นี้ พิมพ์ python -m http.server 8123 แล้วเข้าเว็บผ่าน http://localhost:8123 แทน';
@@ -459,6 +467,9 @@ function showCamError(err) {
   } else if (/NotReadableError|AbortError|Could not start video source/i.test(all)) {
     // กล้องมีอยู่จริง แต่โปรแกรมอื่นแย่งใช้อยู่
     advice = 'กล้องกำลังถูกโปรแกรมอื่นใช้งานอยู่ (เช่น Zoom, Teams, Line, OBS) ให้ปิดโปรแกรมนั้นก่อน แล้วกดลองอีกครั้ง';
+  } else if (name === 'NoVideoFrame') {
+    // กรณีพิเศษ: เบราว์เซอร์บอกว่าเปิดกล้อง "สำเร็จ" แต่ภาพไม่มาจริง
+    advice = 'กล้องเปิดติดแต่ภาพไม่แสดง ลองกด "ลองอีกครั้ง" ด้านล่าง ถ้ายังไม่ขึ้น ให้เปิดเว็บนี้ด้วย Safari หรือ Chrome โดยตรง (ไม่ผ่านแอปแชท) แล้วลองใหม่';
   } else {
     advice = 'ลองรีเฟรชหน้าเว็บ (F5) แล้วกดเปิดกล้องใหม่อีกครั้ง';
   }
@@ -556,19 +567,58 @@ async function startScanner() {
   torchOn = false;
   $('#btn-start-scan').hidden = true;
   $('#btn-stop-scan').hidden = false;
-  $('#scan-frame').hidden = false;                    // โชว์กรอบเล็งเป้า
   $('#btn-switch-cam').hidden = cameras.length < 2;   // มีกล้องเดียว = ไม่ต้องมีปุ่มสลับ
   $('#btn-torch').hidden = false;
   $('#btn-torch').textContent = '🔦 เปิดแฟลช';
+
+  // หมายเหตุ: ยังไม่โชว์กรอบเล็งตรงนี้ — รอให้ "ภาพจากกล้องมาจริง" ก่อน
+  // ไม่งั้นบนมือถือบางเครื่อง วิดีโอยังสูง 0 กรอบจะลอยไปทับปุ่มด้านล่าง
+  prepareVideo();
+}
+
+// ---------- ตรวจว่าภาพจากกล้องขึ้นจริงไหม ----------
+// ปัญหาที่เจอบนมือถือ: เบราว์เซอร์บอกว่าเปิดกล้อง "สำเร็จ" แต่ภาพวิดีโอไม่แสดง
+// (เจอบ่อยใน iPhone และเบราว์เซอร์ในแอปแชท) ฟังก์ชันนี้จัดการ 3 เรื่อง:
+// 1. บังคับคุณสมบัติที่ iOS ต้องมี (playsinline/muted) แล้วสั่งเล่นซ้ำ
+// 2. โชว์กรอบเล็งเป้า "เฉพาะเมื่อ" วิดีโอเริ่มมีภาพจริง (event 'playing')
+// 3. ถ้ารอ 2.5 วินาทีแล้วภาพยังไม่มา = ปิดกล้อง + แจ้งวิธีแก้
+function prepareVideo() {
+  const v = document.querySelector('#qr-reader video');
+  if (v) {
+    // iOS Safari ต้องมี playsinline ไม่งั้นวิดีโอไม่เล่นในหน้าเว็บ
+    // และวิดีโอที่ไม่ muted จะโดนกันไม่ให้เล่นอัตโนมัติ
+    v.setAttribute('playsinline', 'true');
+    v.setAttribute('muted', 'true');
+    v.play().catch(() => { /* บางทีเล่นอยู่แล้ว สั่งซ้ำจะ error เฉยๆ ไม่เป็นไร */ });
+
+    // ภาพเฟรมแรกมาเมื่อไหร่ ค่อยโชว์กรอบเล็ง ({ once: true } = ฟังครั้งเดียวพอ)
+    v.addEventListener('playing', () => { if (scanning) $('#scan-frame').hidden = false; }, { once: true });
+    if (v.videoWidth > 0) $('#scan-frame').hidden = false; // เผื่อภาพมาก่อนเราจะทันฟัง event
+  }
+
+  // ตาข่ายสุดท้าย: ผ่านไป 2.5 วิ เช็คว่าวิดีโอมีขนาดภาพจริงไหม (videoWidth > 0)
+  setTimeout(() => {
+    if (!scanning) return; // ผู้ใช้กดปิดกล้องไปแล้ว ไม่ต้องทำอะไร
+    const vv = document.querySelector('#qr-reader video');
+    if (!vv || vv.videoWidth === 0) {
+      // กล้อง "ติด" แต่ภาพไม่มา = ใช้งานจริงไม่ได้ ปิดให้แล้วบอกวิธีแก้
+      stopScanner();
+      showCamError({ name: 'NoVideoFrame', message: 'กล้องเปิดได้แต่ไม่มีภาพแสดง' });
+    } else {
+      $('#scan-frame').hidden = false; // ภาพมาแล้ว มั่นใจว่ากรอบโชว์แน่นอน
+    }
+  }, 2500);
 }
 
 // ---------- ปิดกล้อง ----------
 async function stopScanner() {
-  if (!scanning || !scanner) return;
-  try {
-    await scanner.stop();  // หยุดกล้อง (ไฟแฟลชจะดับตามอัตโนมัติ)
-    scanner.clear();       // ล้างภาพค้างในกล่องวิดีโอ
-  } catch (e) { /* กล้องปิดไปก่อนแล้ว ไม่เป็นไร */ }
+  if (!scanning) return;
+  if (scanner) {
+    try {
+      await scanner.stop();  // หยุดกล้อง (ไฟแฟลชจะดับตามอัตโนมัติ)
+      scanner.clear();       // ล้างภาพค้างในกล่องวิดีโอ
+    } catch (e) { /* กล้องปิดไปก่อนแล้ว ไม่เป็นไร */ }
+  }
 
   // คืนหน้าจอกลับสภาพเดิม : ซ่อนปุ่มที่ใช้ได้เฉพาะตอนกล้องเปิด
   scanning = false;
@@ -594,6 +644,7 @@ async function switchCamera() {
     await scanner.start(cameras[camIndex].id, SCAN_CONFIG, onScanSuccess, () => {});
     // บอกผู้ใช้ว่าสลับไปตัวไหนแล้ว (บางเครื่องชื่อกล้องว่าง เลยมีชื่อสำรองให้)
     toast('🔄 ' + (cameras[camIndex].label || ('กล้องตัวที่ ' + (camIndex + 1))));
+    prepareVideo(); // กล้องตัวใหม่ = วิดีโอตัวใหม่ ต้องตรวจภาพซ้ำอีกรอบ
   } catch (err) {
     console.error('สลับกล้องไม่สำเร็จ:', err);
     toast('❌ สลับกล้องไม่สำเร็จ');
