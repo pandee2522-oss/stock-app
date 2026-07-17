@@ -184,9 +184,10 @@ $('#product-form').addEventListener('submit', e => {
     products.push(p);
     saveProducts();
     addLog('create', p, p.qty);
-    toast('✅ เพิ่มสินค้าเรียบร้อย');
+    // บันทึกเสร็จแจ้งข้อความยืนยันเฉยๆ ไม่ต้องเด้งหน้า QR
+    // (ถ้าอยากได้ QR ไปติดสินค้า กดปุ่ม "QR" ที่แท็บรายการสินค้าได้ทุกเมื่อ)
+    toast('✅ บันทึกเสร็จสิ้น');
     resetForm();
-    showQrModal(p); // เพิ่มเสร็จเปิด QR ให้เลย จะได้พิมพ์ไปติดสินค้า
   }
   renderSummary();
   renderList();
@@ -430,9 +431,63 @@ const SCAN_FORMATS = [
   Html5QrcodeSupportedFormats.CODABAR,
 ];
 
+// ---------- กล่องแจ้งปัญหาเมื่อเปิดกล้องไม่สำเร็จ ----------
+// ดูจาก "ชนิดของ error" ที่เบราว์เซอร์ส่งมา แล้วแปลเป็นภาษาคน + วิธีแก้
+// จะได้ไม่ต้องเดาเองว่าทำไมกล้องไม่ขึ้น
+function showCamError(err) {
+  const box = $('#cam-error');
+  // ระวัง: บางครั้งไลบรารีส่ง error มาเป็น "ข้อความ" ไม่ใช่ object
+  // เช่น "Error getting userMedia, error = NotAllowedError: Permission denied"
+  // เลยต้องรวมทั้ง err.name และข้อความทั้งหมด มาตรวจหาคำสำคัญพร้อมกัน
+  const name = (err && err.name) || '';
+  const msg = (err && (err.message || String(err))) || '';
+  const all = name + ' ' + msg; // ข้อความรวมไว้ค้นหาคำสำคัญ
+  let advice;
+
+  if (location.protocol === 'file:') {
+    // เปิดไฟล์ index.html ตรงๆ (ดับเบิลคลิก) = ที่อยู่ขึ้นต้นด้วย file://
+    // เบราว์เซอร์จะไม่ยอมให้เว็บแบบนี้ใช้กล้องเด็ดขาด
+    advice = 'คุณเปิดไฟล์โดยตรง (file://) ซึ่งเบราว์เซอร์บล็อกกล้องเสมอ วิธีแก้: เปิดโปรแกรม cmd ในโฟลเดอร์นี้ พิมพ์ python -m http.server 8123 แล้วเข้าเว็บผ่าน http://localhost:8123 แทน';
+  } else if (!window.isSecureContext || !navigator.mediaDevices) {
+    // เข้าผ่าน http ธรรมดาที่ไม่ใช่ localhost (เช่น http://192.168.x.x)
+    advice = 'หน้านี้ไม่ได้เปิดผ่าน localhost หรือ https เบราว์เซอร์จึงบล็อกกล้อง ให้เปิดผ่าน http://localhost:8123 (ในเครื่อง) หรือ deploy ขึ้นเว็บที่เป็น https (เช่น GitHub Pages) ถ้าใช้จากมือถือ';
+  } else if (/NotAllowedError|Permission denied|PermissionDenied/i.test(all)) {
+    // ผู้ใช้เคยกดปุ่ม "บล็อก" ตอนเบราว์เซอร์ถามขอใช้กล้อง
+    advice = 'การใช้กล้องถูกปฏิเสธไว้ วิธีแก้: กดไอคอนแม่กุญแจ 🔒 หรือรูปกล้อง 📷 ข้างช่องที่อยู่เว็บ → เปลี่ยนสิทธิ์ "กล้อง" เป็น อนุญาต → แล้วรีเฟรชหน้าเว็บ';
+  } else if (/NotFoundError|Requested device not found|ไม่พบกล้อง/i.test(all)) {
+    advice = 'ไม่พบกล้องในเครื่องนี้ ตรวจสอบว่าเว็บแคมเสียบอยู่ และไม่ได้ปิดกล้องไว้ใน Windows (Settings → Privacy & security → Camera)';
+  } else if (/NotReadableError|AbortError|Could not start video source/i.test(all)) {
+    // กล้องมีอยู่จริง แต่โปรแกรมอื่นแย่งใช้อยู่
+    advice = 'กล้องกำลังถูกโปรแกรมอื่นใช้งานอยู่ (เช่น Zoom, Teams, Line, OBS) ให้ปิดโปรแกรมนั้นก่อน แล้วกดลองอีกครั้ง';
+  } else {
+    advice = 'ลองรีเฟรชหน้าเว็บ (F5) แล้วกดเปิดกล้องใหม่อีกครั้ง';
+  }
+
+  box.innerHTML = `
+    <b>⚠ เปิดกล้องไม่สำเร็จ</b><br>
+    ${esc(advice)}
+    ${msg ? `<br><small>รายละเอียดทางเทคนิค: ${esc(name)} — ${esc(msg)}</small>` : ''}
+    <div class="btn-row">
+      <button class="btn primary small" onclick="startScanner()">🔄 ลองอีกครั้ง</button>
+    </div>`;
+  box.hidden = false;
+}
+
 // ---------- เปิดกล้องเริ่มสแกน ----------
+// กลยุทธ์: ลองเปิดกล้อง 3 วิธีเรียงกัน วิธีไหนติดก่อนใช้วิธีนั้นเลย
+//   แผน 1: บอกเบราว์เซอร์ว่า "ขอกล้องหลัง" (facingMode: environment) — วิธีมาตรฐาน มือถือชอบ
+//   แผน 2: ขอรายชื่อกล้องทั้งหมด แล้วเลือกเปิดเองทีละตัว — เผื่อแผน 1 ใช้ไม่ได้
+//   แผน 3: ขอกล้องหน้า (facingMode: user) — ทางหนีสุดท้าย ยังดีกว่าเปิดไม่ได้เลย
+// ถ้าพังหมดทั้ง 3 แผน จะโชว์กล่องบอกสาเหตุ + วิธีแก้ให้ผู้ใช้
 async function startScanner() {
   if (scanning) return; // เปิดอยู่แล้วไม่ต้องเปิดซ้ำ
+
+  // ซ่อนกล่อง error เก่า (ถ้ามี) และเปลี่ยนปุ่มเป็นสถานะ "กำลังเปิด..."
+  // เพื่อให้ผู้ใช้รู้ว่าระบบกำลังทำงาน ไม่ใช่กดแล้วเงียบ
+  $('#cam-error').hidden = true;
+  const startBtn = $('#btn-start-scan');
+  startBtn.disabled = true;
+  startBtn.textContent = '⏳ กำลังเปิดกล้อง...';
 
   // สร้างตัวอ่านครั้งแรกครั้งเดียว (ครั้งถัดไปใช้ตัวเดิม)
   scanner = scanner || new Html5Qrcode('qr-reader', {
@@ -442,27 +497,61 @@ async function startScanner() {
     verbose: false,
   });
 
+  let started = false;  // ธงบอกว่าเปิดกล้องติดแล้วหรือยัง
+  let lastErr = null;   // เก็บ error ล่าสุดไว้แสดงตอนพังหมดทุกแผน
+
+  // ----- แผน 1 : ขอกล้องหลังจากเบราว์เซอร์ตรงๆ -----
   try {
-    // ขอรายชื่อกล้องทั้งหมด (ขั้นตอนนี้เบราว์เซอร์จะเด้งขออนุญาตใช้กล้อง)
-    cameras = await Html5Qrcode.getCameras();
-    if (!cameras || !cameras.length) throw new Error('ไม่พบกล้องในเครื่องนี้');
+    await scanner.start({ facingMode: 'environment' }, SCAN_CONFIG, onScanSuccess, () => {});
+    started = true;
+  } catch (e) { lastErr = e; }
 
-    // เลือกกล้อง "หลัง" ก่อนถ้าหาเจอ (ดูจากชื่อกล้องว่ามีคำว่า back/rear/หลัง)
-    // เพราะการสแกนของใช้กล้องหลังสะดวกที่สุด / ถ้าไม่เจอใช้ตัวแรกไป
-    const backIdx = cameras.findIndex(c => /back|rear|environment|หลัง/i.test(c.label || ''));
-    camIndex = backIdx >= 0 ? backIdx : 0;
+  // ----- แผน 2 : ขอรายชื่อกล้องแล้วเลือกเปิดเอง -----
+  if (!started) {
+    try {
+      cameras = await Html5Qrcode.getCameras(); // ขั้นตอนนี้เบราว์เซอร์จะเด้งขออนุญาต
+      if (cameras && cameras.length) {
+        // เลือกกล้อง "หลัง" ก่อนถ้ามี (ดูจากชื่อว่ามีคำว่า back/rear/หลัง)
+        const backIdx = cameras.findIndex(c => /back|rear|environment|หลัง/i.test(c.label || ''));
+        camIndex = backIdx >= 0 ? backIdx : 0;
+        await scanner.start(cameras[camIndex].id, SCAN_CONFIG, onScanSuccess, () => {});
+        started = true;
+      }
+    } catch (e) { lastErr = e; }
+  }
 
-    // สั่งเปิดกล้องตัวที่เลือก แล้วเริ่มอ่านรหัส
-    // - เจอรหัสเมื่อไหร่ จะเรียก onScanSuccess ให้เอง
-    // - เฟรมที่อ่านไม่เจอ (คนยังเล็งไม่ตรง) ปล่อยผ่าน ไม่ต้องทำอะไร
-    await scanner.start(cameras[camIndex].id, SCAN_CONFIG, onScanSuccess, () => {});
-  } catch (err) {
-    console.error('เปิดกล้องไม่สำเร็จ:', err);
-    toast('❌ เปิดกล้องไม่ได้: ' + (err.message || err) + ' — ต้องอนุญาตกล้อง และเปิดผ่าน localhost หรือ https');
+  // ----- แผน 3 : กล้องหน้า -----
+  if (!started) {
+    try {
+      await scanner.start({ facingMode: 'user' }, SCAN_CONFIG, onScanSuccess, () => {});
+      started = true;
+    } catch (e) { lastErr = e; }
+  }
+
+  // คืนสภาพปุ่มก่อน แล้วค่อยตัดสินว่าสำเร็จหรือพัง
+  startBtn.disabled = false;
+  startBtn.textContent = '▶ เปิดกล้องสแกน';
+
+  if (!started) {
+    console.error('เปิดกล้องไม่สำเร็จทุกวิธี:', lastErr);
+    showCamError(lastErr); // โชว์กล่องอธิบายสาเหตุ + วิธีแก้ + ปุ่มลองใหม่
     return;
   }
 
-  // เปิดสำเร็จ : ปรับหน้าจอเข้าสู่โหมดสแกน
+  // ----- เปิดติดแล้ว : เตรียมข้อมูลสำหรับปุ่มสลับกล้อง -----
+  // ตอนนี้ผู้ใช้อนุญาตกล้องแล้ว getCameras จะได้รายชื่อครบ (รวมชื่อกล้อง)
+  if (!cameras || !cameras.length) {
+    try { cameras = await Html5Qrcode.getCameras(); } catch (e) { cameras = []; }
+  }
+  // ถามไลบรารีว่ากล้องที่เปิดอยู่จริงๆ คือตัวไหน (deviceId)
+  // เอาไปเทียบกับรายชื่อ เพื่อให้ปุ่มสลับกล้องวนไป "ตัวถัดไป" ได้ถูกต้อง
+  try {
+    const devId = scanner.getRunningTrackSettings().deviceId;
+    const idx = cameras.findIndex(c => c.id === devId);
+    if (idx >= 0) camIndex = idx;
+  } catch (e) { /* บางเบราว์เซอร์ไม่บอก deviceId ก็ไม่เป็นไร */ }
+
+  // ปรับหน้าจอเข้าสู่โหมดสแกน
   scanning = true;
   torchOn = false;
   $('#btn-start-scan').hidden = true;
