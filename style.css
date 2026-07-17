@@ -115,14 +115,79 @@ input:focus, textarea:focus { outline: 2px solid var(--primary); border-color: t
 .btn-row.center { justify-content: center; }
 
 /* ---------- Scanner ---------- */
-#qr-reader {
-  width: 100%;
+/* ตัวครอบวิดีโอกล้อง : ต้องเป็น position: relative
+   เพื่อให้กรอบเล็งเป้า (#scan-frame) ที่เป็น absolute ลอยทับวิดีโอได้พอดี */
+#qr-reader-wrap {
+  position: relative;
   max-width: 420px;
   margin: 0 auto;
+}
+#qr-reader {
+  width: 100%;
   border-radius: 10px;
   overflow: hidden;
 }
-#qr-reader:empty { display: none; }
+#qr-reader:empty { display: none; } /* ยังไม่เปิดกล้อง = ซ่อนพื้นที่ว่างไว้ */
+
+/* กรอบเล็งเป้า : ลอยทับวิดีโอทั้งผืน (inset: 0 = ชิดทุกขอบ)
+   pointer-events: none สำคัญมาก = ให้กดทะลุผ่านกรอบไปโดนวิดีโอได้ */
+#scan-frame {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 5;
+}
+#scan-frame[hidden] { display: none; }
+
+/* กล่องกรอบเล็ง : ขนาดใกล้เคียงกับพื้นที่ที่ไลบรารีใช้ถอดรหัสจริง (qrbox 280x180)
+   เพื่อให้ผู้ใช้วางโค้ดตรงตำแหน่งที่ระบบอ่านได้พอดี */
+.frame-box {
+  position: relative;
+  width: 280px;
+  height: 180px;
+  max-width: 85%;
+  flex-shrink: 0; /* กัน flexbox บีบกรอบให้เตี้ยลงเมื่อพื้นที่วิดีโอเล็ก */
+}
+
+/* มุมทั้ง 4 ของกรอบ : ใช้เทคนิคตัดเส้นขอบออก 2 ด้าน ให้เหลือเป็นรูปตัว L */
+.corner {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border: 4px solid #22c55e;   /* สีเขียวสว่าง มองเห็นง่ายบนภาพกล้อง */
+}
+.corner.tl { top: 0;    left: 0;  border-right: none; border-bottom: none; border-radius: 10px 0 0 0; }
+.corner.tr { top: 0;    right: 0; border-left: none;  border-bottom: none; border-radius: 0 10px 0 0; }
+.corner.bl { bottom: 0; left: 0;  border-right: none; border-top: none;    border-radius: 0 0 0 10px; }
+.corner.br { bottom: 0; right: 0; border-left: none;  border-top: none;    border-radius: 0 0 10px 0; }
+
+/* เส้นสแกนสีเขียว : ใช้ animation เลื่อนตำแหน่ง top ขึ้น-ลงวนไปเรื่อยๆ
+   ให้ความรู้สึกเหมือนเครื่องสแกนกำลังกวาดอ่าน */
+.scan-line {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  height: 3px;
+  background: #22c55e;
+  box-shadow: 0 0 10px #22c55e; /* เรืองแสงรอบเส้น */
+  animation: scanmove 2s ease-in-out infinite;
+}
+@keyframes scanmove {
+  0%, 100% { top: 8%; }   /* เริ่มบนสุด */
+  50%      { top: 90%; }  /* ครึ่งทางลงล่างสุด แล้ววนกลับ */
+}
+
+/* ข้อความช่วยบอกใต้กรอบ : ใส่เงาให้อ่านออกแม้พื้นหลังภาพกล้องจะสว่าง */
+.frame-hint {
+  margin-top: 10px;
+  color: #fff;
+  font-size: 0.85rem;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+}
 
 #scan-result { margin-top: 14px; }
 .result-card {
