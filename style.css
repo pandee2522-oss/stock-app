@@ -189,6 +189,19 @@ input:focus, textarea:focus { outline: 2px solid var(--primary); border-color: t
   text-shadow: 0 1px 4px rgba(0,0,0,0.9);
 }
 
+/* กล่องแจ้งปัญหากล้อง : โทนเหลืองเตือน อ่านง่าย ไม่น่ากลัวเกินไป */
+#cam-error {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #fbbf24;
+  background: #fffbeb;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: #92400e;
+}
+#cam-error small { color: #a16207; word-break: break-all; }
+
 #scan-result { margin-top: 14px; }
 .result-card {
   border: 2px solid var(--success);
