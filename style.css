@@ -129,6 +129,15 @@ input:focus, textarea:focus { outline: 2px solid var(--primary); border-color: t
 }
 #qr-reader:empty { display: none; } /* ยังไม่เปิดกล้อง = ซ่อนพื้นที่ว่างไว้ */
 
+/* บังคับขนาดวิดีโอกล้องให้เต็มกว้างเสมอ (บางเบราว์เซอร์บนมือถือ
+   ไม่ยอมกำหนดขนาดให้เอง ทำให้วิดีโอสูง 0 มองไม่เห็นภาพ) */
+#qr-reader video {
+  width: 100% !important;
+  display: block;
+  border-radius: 10px;
+  background: #000; /* พื้นดำระหว่างรอภาพแรกจากกล้อง */
+}
+
 /* กรอบเล็งเป้า : ลอยทับวิดีโอทั้งผืน (inset: 0 = ชิดทุกขอบ)
    pointer-events: none สำคัญมาก = ให้กดทะลุผ่านกรอบไปโดนวิดีโอได้ */
 #scan-frame {
